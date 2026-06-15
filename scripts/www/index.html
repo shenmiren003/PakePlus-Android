@@ -98,6 +98,36 @@
         .copy-btn {
             background-color: #27ae60;
         }
+        /* 核心计算结果区域 */
+        .core-result {
+            background: linear-gradient(135deg, #e6f0ff 0%, #d4e4ff 100%);
+            border-radius: 8px;
+            padding: 14px;
+            margin-bottom: 16px;
+        }
+        .core-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .core-item {
+            background: rgba(200, 225, 255, 0.25);
+            border-radius: 6px;
+            padding: 10px;
+            text-align: center;
+        }
+        .core-label {
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+        .core-value {
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .core-unit {
+            font-size: 11px;
+            opacity: 0.8;
+        }
         /* 表格容器 - 横向滚动适配手机 */
         .table-wrap {
             overflow-x: auto;
@@ -233,12 +263,44 @@
             <div class="note">注：带 <span class="red">*</span> 为必填项</div>
         </div>
 
-        <!-- 功能按钮：计算、重置、查看表格、复制结果 -->
+        <!-- 功能按钮 -->
         <div class="btn-group">
             <button class="calc-btn" id="calculateBtn">计算</button>
             <button class="reset-btn" id="resetBtn">重置</button>
             <button class="table-btn" id="tableBtn">化验结果表</button>
             <button class="copy-btn" id="copyBtn">复制结果</button>
+        </div>
+
+        <!-- 核心计算结果区域 -->
+        <div class="core-result">
+            <div class="section-title" style="border:none;margin:0 0 10px;">核心计算结果</div>
+            <div class="core-grid">
+                <div class="core-item">
+                    <div class="core-label">全水分</div>
+                    <div class="core-value" id="core_Mt">--</div>
+                    <div class="core-unit">%</div>
+                </div>
+                <div class="core-item">
+                    <div class="core-label">干基硫</div>
+                    <div class="core-value" id="core_Std">--</div>
+                    <div class="core-unit">%</div>
+                </div>
+                <div class="core-item">
+                    <div class="core-label">收到基硫</div>
+                    <div class="core-value" id="core_Star">--</div>
+                    <div class="core-unit">%</div>
+                </div>
+                <div class="core-item">
+                    <div class="core-label">收到基低位发热量</div>
+                    <div class="core-value" id="core_Qnetar">--</div>
+                    <div class="core-unit">MJ/Kg</div>
+                </div>
+                <div class="core-item" style="grid-column: 1 / -1;">
+                    <div class="core-label">收到基低位发热量</div>
+                    <div class="core-value" id="core_Qnetar_kcal">--</div>
+                    <div class="core-unit">kcal/Kg</div>
+                </div>
+            </div>
         </div>
 
         <!-- 完整化验结果表（默认隐藏） -->
@@ -335,7 +397,7 @@
             const y = now.getFullYear();
             const m = String(now.getMonth() + 1).padStart(2, '0');
             const d = String(now.getDate()).padStart(2, '0');
-            $('testDate').value = y + '-' + m + '-';
+            $('testDate').value = y + '-' + m + '-' + d;
         };
 
         // 提示框
@@ -438,8 +500,10 @@
         let copyData = {
             date: "",
             coalName: "",
+            mt: "",
             sDry: "",
             sAr: "",
+            qMj: "",
             qKcal: ""
         };
 
@@ -508,14 +572,23 @@
                     const Hdaf = den2 === 0 ? 0 : Had * 100 / den2;
 
                     // 缓存用于复制的数据
-                    copyData.date = $('testDate').value || "未填写";
-                    copyData.coalName = $('testCode').value || "未填写";
+                    copyData.date = $('testDate').value || "";
+                    copyData.coalName = $('testCode').value || "未填写煤样";
+                    copyData.mt = Mt.toFixed(1);
                     copyData.sDry = Std.toFixed(2);
                     copyData.sAr = Star.toFixed(2);
+                    copyData.qMj = Qnetar_mj;
                     copyData.qKcal = Qnetar_kcal_2;
 
+                    // 核心结果赋值
+                    setText('core_Mt', copyData.mt);
+                    setText('core_Std', copyData.sDry);
+                    setText('core_Star', copyData.sAr);
+                    setText('core_Qnetar', copyData.qMj);
+                    setText('core_Qnetar_kcal', copyData.qKcal);
+
                     // 表格赋值
-                    setText('res_Mt', Mt.toFixed(1));
+                    setText('res_Mt', copyData.mt);
                     setText('res_Mad', Mad.toFixed(2));
                     setText('res_Aad', Aad.toFixed(2));
                     setText('res_Ad', Ad.toFixed(2));
@@ -560,12 +633,31 @@
             }
         }
 
-        // 复制指定内容
+        // 复制核心计算结果（按要求优化）
         async function copyResult() {
-            const content = `化验日期：${copy.date}\n煤样名称：${copy.coalName}\n干燥基硫：${copy.sDry} %\n收到基硫：${copy.sAr} %\n收到基低位发热量：${copy.qKcal} kcal/kg`;
+            if (copyData.qKcal === "") {
+                showToast('请先点击计算按钮', 'error');
+                return;
+            }
+
+            // 处理日期：仅保留月日
+            let dateShort = "未填写日期";
+            if (copyData.date) {
+                const date = new Date(copyData.date);
+                const month = date.getMonth() + 1;
+                const day = date.getDate();
+                dateShort = `${month}月${day}日`;
+            }
+
+            // 合并日期和煤样名称
+            const coalInfo = dateShort + copyData.coalName;
+
+            // 拼接复制内容（删除MJ/Kg项，优化排版）
+            const content = `煤样信息：${coalInfo}\n全水分：${copyData.mt} %\n干基硫：${copyData.sDry} %\n收到基硫：${copyData.sAr} %\n收到基低位发热量：${copyData.qKcal} kcal/kg`;
+
             try {
                 await navigator.clipboard.writeText(content);
-                showToast('复制成功');
+                showToast('核心结果复制成功');
             } catch (err) {
                 // 兼容低版本浏览器
                 const textarea = document.createElement('textarea');
@@ -574,7 +666,7 @@
                 textarea.select();
                 document.execCommand('copy');
                 document.body.removeChild(textarea);
-                showToast('复制成功');
+                showToast('核心结果复制成功');
             }
         }
 
@@ -586,11 +678,11 @@
                 inp.classList.remove('invalid');
             });
             document.querySelectorAll('.error-hint').forEach(h => h.style.display = 'none');
-            document.querySelectorAll('[id^="res_"]').forEach(el => {
+            document.querySelectorAll('[id^="core_"],[id^="res_"]').forEach(el => {
                 el.innerText = '--';
             });
             // 清空缓存
-            copyData = { date: "", coalName: "", sDry: "", sAr: "", qKcal: "" };
+            copyData = { date: "", coalName: "", mt: "", sDry: "", sAr: "", qMj: "", qKcal: "" };
             // 隐藏表格
             $('tableWrap').style.display = 'none';
             showToast('已全部清空');
